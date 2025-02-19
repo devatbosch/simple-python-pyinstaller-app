@@ -1,55 +1,37 @@
+
+
 pipeline {
-    agent any 
+    agent any
+    options {
+        skipStagesAfterUnstable()
+    }
     stages {
-        stage('Checkout') { 
+        stage('Build') {
             steps {
-                echo 'Cloning repository...'
-                git 'https://github.com/your-repo/sample-project.git'
+                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
-
-        stage('Build') { 
-            steps {
-                echo 'Compiling Python source files...'
-                sh 'python -m py_compile sources/add2vals.py sources/calc.py' 
-                stash(name: 'compiled-results', includes: 'sources/*.py*') 
-            }
-        }
-
         stage('Test') {
             steps {
-                echo 'Running unit tests...'
-                sh 'pytest tests/' 
+                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
+            }
+            post {
+                always {
+                    junit 'test-reports/results.xml'
+                }
             }
         }
-
-        stage('Code Analysis') {
+        stage('Deliver') { 
             steps {
-                echo 'Running static code analysis...'
-                sh 'pylint sources/*.py'
+                sh "pyinstaller --onefile sources/add2vals.py" 
             }
-        }
-
-        stage('Package') {
-            steps {
-                echo 'Creating package...'
-                sh 'tar -czf app.tar.gz sources/'
-                stash(name: 'package', includes: 'app.tar.gz')
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                echo 'Deploying application...'
-                sh 'scp app.tar.gz user@server:/deploy/path/'
-            }
-        }
-
-        stage('Cleanup') {
-            steps {
-                echo 'Cleaning up workspace...'
-                deleteDir()
+            post {
+                success {
+                    archiveArtifacts 'dist/add2vals' 
+                }
             }
         }
     }
 }
+
